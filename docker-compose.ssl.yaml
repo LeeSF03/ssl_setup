@@ -1,0 +1,29 @@
+services:
+  nginx:
+    image: leesf003/cert-nginx
+    container_name: nginx
+    volumes:
+      - acme:/var/www/acme
+      - cert:/var/www/cert
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - NGINX_HOST=portfolio-nginx.com
+      - NGINX_PORT=80
+
+  certbot:
+    image: certbot/certbot:v3.1.0
+    container_name: certbot
+    depends_on:
+      - nginx
+    volumes:
+      - acme:/letsencrypt
+      - cert:/etc/letsencrypt
+    command: certonly --reinstall --webroot --webroot-path=/letsencrypt --email shuenfeilee@gmail.com --agree-tos --no-eff-email -d leesf.xyz
+
+volumes:
+  acme:
+
+  cert:
+    external: true

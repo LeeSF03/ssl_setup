@@ -1,0 +1,107 @@
+---
+- name: Install and enable docker daemon
+  hosts: azure
+  become: yes
+  tasks:
+    - name: Install dependencies to install docker
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip # these dependencies are so that ansible can interact with docker
+          - virtualenv
+          - python3-setuptools
+        state: latest
+        update_cache: true
+
+    - name: Add docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: true
+
+    - name: Install docker module for python
+      pip:
+        name: docker
+
+- name: Setup user, compose file and inbound traffic
+  hosts: azure
+  become: yes
+
+  vars_files:
+    - vault.yaml
+
+  tasks:
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
+    - name: Reset ssh connection to take allow affect of group append
+      meta: reset_connection
+
+    - name: Copy docker compose file
+      copy:
+        src: ./docker-compose.ssl.yaml
+        dest: "/home/{{ ansible_user }}/docker-compose.yaml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    - name: Copy .env file
+      copy:
+        src: /mnt/d/Projects/portfolio/.env
+        dest: "/home/{{ ansible_user }}/.env"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    - name: Install firewall
+      apt:
+        name: firewalld
+
+    - name: Permit inbound traffic to port 443/tcp for https
+      firewalld:
+        port: 443/tcp
+        permanent: true
+        immediate: true
+        state: enabled
+
+    - name: Permit inbound traffic to port 80/tcp for http
+      firewalld:
+        port: 80/tcp
+        permanent: true
+        immediate: true
+        state: enabled
+
+    - name: Log into DockerHub
+      community.docker.docker_login:
+        username: leesf003
+        password: "{{ docker_pass }}"
+
+- name: Pull and run container to get certificate
+  tasks:
+    - name: Create docker volume
+      community.docker.docker_volume:
+        state: present
+        volume_name: cert
+
+    - name: Run cert containers
+      community.docker.docker_compose_v2:
+        state: present
+        project_src: "/home/{{ ansible_user }}"
+        files:
+          - docker-compose.yaml

@@ -1,0 +1,21 @@
+---
+- name: Remove containers and image for cert setup
+  hosts: azure
+  tasks:
+    - name: Run compose down
+      community.docker.docker_compose_v2:
+        state: absent
+        remove_volumes: true
+        project_src: "/home/{{ ansible_user }}"
+        files:
+          - docker-compose.yaml
+
+    - name: Remove cert-nginx image
+      community.docker.docker_image_remove:
+        name: leesf003/cert-nginx
+        force: true
+
+    - name: Remove certbot image
+      community.docker.docker_image_remove:
+        name: certbot/certbot
+        force: true
